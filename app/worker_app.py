@@ -1,7 +1,7 @@
 ﻿"""Celery application used by the DIMS worker container."""
 
 import os
-from datetime import datetime, timezone
+import logging
 
 from celery import Celery
 from sqlalchemy import text
@@ -12,6 +12,7 @@ from .core.db import engine
 redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
 redis_port = os.getenv("REDIS_PORT", "6379")
 redis_url = f"redis://{redis_host}:{redis_port}/0"
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "dims",
@@ -31,16 +32,27 @@ celery_app = Celery(
 celery_app.conf.beat_schedule = {
     "ensure-scan-event-partitions": {
         "task": "app.worker_app.ensure_scan_event_partitions",
-        "schedule": 86400.0,
+        "schedule": float(os.getenv("PARTITION_MAINTENANCE_INTERVAL", "86400")),
     }
 }
 
 
 @celery_app.task(name="app.worker_app.ensure_scan_event_partitions")
-def ensure_scan_event_partitions() -> str:
-    """Create the current and next two monthly scan-event partitions."""
+def ensure_scan_event_partitions(months_ahead: int = 3) -> dict[str, object]:
+    """Create monthly partitions and safely drain matching default-partition rows."""
     with engine.begin() as connection:
-        connection.execute(text("SELECT ensure_scan_event_partitions(:months)"), {"months": 3})
-    return datetime.now(timezone.utc).isoformat()
+        default_rows = connection.execute(
+            text("SELECT count(*) FROM scan_event_default")
+        ).scalar_one()
+        if default_rows:
+            logger.warning(
+                "scan_event_default contains %s rows; maintenance will redistribute matching months",
+                default_rows,
+            )
+        result = connection.execute(
+            text("SELECT ensure_scan_event_partitions(:months)"),
+            {"months": months_ahead},
+        ).scalar_one()
+    return dict(result)
 
 __all__ = ["celery_app"]
