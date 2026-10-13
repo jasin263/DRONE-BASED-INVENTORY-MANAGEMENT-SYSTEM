@@ -5,7 +5,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.auth import Principal, require_roles, require_site_access
 
 
 router = APIRouter()
@@ -116,7 +118,18 @@ async def status() -> dict[str, str]:
 
 
 @router.get("/inventory-map")
-async def inventory_map() -> dict[str, Any]:
+async def inventory_map(
+    principal: Principal = Depends(
+        require_roles(
+            "Admin",
+            "Inventory Controller",
+            "Warehouse Supervisor",
+            "Viewer",
+            "System Integration",
+        )
+    ),
+    _site_principal: Principal = Depends(require_site_access),
+) -> dict[str, Any]:
     """Return the dataset warehouse layout and inventory status by bin."""
     try:
         return _inventory_map()

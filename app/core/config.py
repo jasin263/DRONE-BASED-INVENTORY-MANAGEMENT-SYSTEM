@@ -43,6 +43,8 @@ class Settings:
     keycloak_realm: str = os.getenv("KEYCLOAK_REALM", "drims")
     keycloak_client_id: str = os.getenv("KEYCLOAK_CLIENT_ID", "drims-api")
     keycloak_client_secret: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "secret")
+    keycloak_audience: str = os.getenv("KEYCLOAK_AUDIENCE", "drims-web")
+    jwks_cache_seconds: int = int(os.getenv("JWKS_CACHE_SECONDS", "300"))
     readiness_timeout_seconds: float = float(
         os.getenv("READINESS_TIMEOUT_SECONDS", "3")
     )
