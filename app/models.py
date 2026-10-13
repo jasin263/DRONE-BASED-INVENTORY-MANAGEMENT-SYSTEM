@@ -6,7 +6,7 @@ Uses SQLAlchemy 1.4 compatible syntax.
 
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Boolean, Text, JSON, Date,
-    Enum as SQLAEnum, ForeignKey, UniqueConstraint, event
+    Enum as SQLAEnum, ForeignKey, ForeignKeyConstraint, UniqueConstraint, event
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, backref
@@ -213,14 +213,14 @@ class RawPayload(Base):
 # ============================================
 
 class ScanEvent(Base):
-    """Silver layer: individual scan events (partitioned by month in production)."""
+    """Silver layer: individual scan events partitioned by event month."""
     __tablename__ = "scan_event"
 
     id = Column(Integer, primary_key=True, nullable=False)
     event_id = Column(String(36), nullable=False, unique=True)  # UUID as string
     mission_id = Column(Integer, ForeignKey("mission.id", ondelete="CASCADE"), nullable=False)
     drone_id = Column(Integer, ForeignKey("drone.id", ondelete="SET NULL"), nullable=True)
-    timestamp = Column(DateTime(timezone=True), nullable=False)
+    event_time = Column(DateTime(timezone=True), primary_key=True, nullable=False)
     read_type = Column(SQLAEnum(*read_type_enum, name="readtype", native_enum=False), nullable=False)
     symbology = Column(String(50), nullable=True)  # EAN-13, Code-128, QR, RFID EPC etc
     value = Column(String(255), nullable=False)  # raw scanned value
@@ -253,7 +253,8 @@ class ScanItem(Base):
     __tablename__ = "scan_item"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    scan_event_id = Column(Integer, ForeignKey("scan_event.id", ondelete="CASCADE"), nullable=False)
+    scan_event_id = Column(Integer, nullable=False)
+    scan_event_time = Column(DateTime(timezone=True), nullable=False)
     sku_id = Column(Integer, ForeignKey("sku.id", ondelete="SET NULL"), nullable=True)
     lot = Column(String(100), nullable=True)
     serial = Column(String(100), nullable=True)
@@ -263,6 +264,14 @@ class ScanItem(Base):
     is_duplicate = Column(Boolean, nullable=False, default=False)
     confidence = Column(Float, nullable=False, default=1.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["scan_event_id", "scan_event_time"],
+            ["scan_event.id", "scan_event.event_time"],
+            ondelete="CASCADE",
+        ),
+    )
 
     # Relationships
     scan_event = relationship("ScanEvent", back_populates="scan_item")

@@ -16,6 +16,14 @@ docker compose ps
 The dashboard is available at `http://localhost:3000`. The API live and
 readiness probes are available at `/health/live` and `/health/ready`.
 
+Alembic migrations run automatically from the backend entrypoint. To run them
+manually inside the backend container, use:
+
+```powershell
+docker compose exec backend alembic -c /app/backend/db/alembic.ini upgrade head
+docker compose exec backend alembic -c /app/backend/db/alembic.ini current
+```
+
 ## Repository boundaries
 
 DRIMS begins at the receiving-system data contract. Drone flight control,

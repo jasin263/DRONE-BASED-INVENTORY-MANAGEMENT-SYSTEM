@@ -1,8 +1,12 @@
 ﻿"""Celery application used by the DIMS worker container."""
 
 import os
+from datetime import datetime, timezone
 
 from celery import Celery
+from sqlalchemy import text
+
+from .core.db import engine
 
 
 redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
@@ -24,5 +28,19 @@ celery_app = Celery(
     ],
 )
 
-__all__ = ["celery_app"]
+celery_app.conf.beat_schedule = {
+    "ensure-scan-event-partitions": {
+        "task": "app.worker_app.ensure_scan_event_partitions",
+        "schedule": 86400.0,
+    }
+}
 
+
+@celery_app.task(name="app.worker_app.ensure_scan_event_partitions")
+def ensure_scan_event_partitions() -> str:
+    """Create the current and next two monthly scan-event partitions."""
+    with engine.begin() as connection:
+        connection.execute(text("SELECT ensure_scan_event_partitions(:months)"), {"months": 3})
+    return datetime.now(timezone.utc).isoformat()
+
+__all__ = ["celery_app"]

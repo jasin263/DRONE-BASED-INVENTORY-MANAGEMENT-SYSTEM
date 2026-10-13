@@ -15,3 +15,11 @@ The audit command was run in the Node 20 build environment; host npm is not requ
 ## Remaining security work
 
 The Gate 1 authentication and authorization evidence is still open. In particular, backend JWT validation/RBAC and the full per-role Playwright matrix are not yet verified. Dependency audit success does not constitute authorization proof.
+
+## Development credentials
+
+The Compose defaults and imported Keycloak realm contain development-only
+credentials for local Docker use: `admin/adminpass`,
+`inventory_controller/controllerpass`, `warehouse_supervisor/supervisorpass`,
+`viewer/viewerpass`, and `system_integration/integrationpass`. They must be
+overridden or removed before any shared, staging, or production deployment.
