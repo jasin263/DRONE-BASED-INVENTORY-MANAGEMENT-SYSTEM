@@ -23,3 +23,7 @@ credentials for local Docker use: `admin/adminpass`,
 `inventory_controller/controllerpass`, `warehouse_supervisor/supervisorpass`,
 `viewer/viewerpass`, and `system_integration/integrationpass`. They must be
 overridden or removed before any shared, staging, or production deployment.
+The `drims-api` Keycloak client and its secret are development-only values.
+The realm maps each development user's `site_ids` attribute into the access
+token and adds the `drims-api` audience. Replace the secret and disable direct
+grants before any non-development deployment.

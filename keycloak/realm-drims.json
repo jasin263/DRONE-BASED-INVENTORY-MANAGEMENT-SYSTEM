@@ -21,6 +21,43 @@
       "redirectUris": ["http://localhost:3000/*", "http://frontend/*"],
       "webOrigins": ["http://localhost:3000", "http://frontend"],
       "attributes": {"pkce.code.challenge.method": "S256"}
+    },
+    {
+      "clientId": "drims-api",
+      "name": "DRIMS API",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "drims-api-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "drims-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "drims-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "site-ids",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "site_ids",
+            "claim.name": "site_ids",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -32,6 +69,7 @@
       "lastName": "User",
       "enabled": true,
       "realmRoles": ["Admin"],
+      "attributes": {"site_ids": ["WH01"]},
       "credentials": [{"type": "password", "value": "adminpass", "temporary": false}]
     },
     {
@@ -42,6 +80,7 @@
       "lastName": "Controller",
       "enabled": true,
       "realmRoles": ["Inventory Controller"],
+      "attributes": {"site_ids": ["WH01"]},
       "credentials": [{"type": "password", "value": "controllerpass", "temporary": false}]
     },
     {
@@ -52,6 +91,7 @@
       "lastName": "Supervisor",
       "enabled": true,
       "realmRoles": ["Warehouse Supervisor"],
+      "attributes": {"site_ids": ["WH01"]},
       "credentials": [{"type": "password", "value": "supervisorpass", "temporary": false}]
     },
     {
@@ -62,6 +102,7 @@
       "lastName": "User",
       "enabled": true,
       "realmRoles": ["Viewer"],
+      "attributes": {"site_ids": ["WH01"]},
       "credentials": [{"type": "password", "value": "viewerpass", "temporary": false}]
     },
     {
@@ -72,7 +113,15 @@
       "lastName": "Account",
       "enabled": true,
       "realmRoles": ["System Integration"],
+      "attributes": {"site_ids": ["WH01"]},
       "credentials": [{"type": "password", "value": "integrationpass", "temporary": false}]
+    },
+    {
+      "username": "service-account-drims-api",
+      "enabled": true,
+      "serviceAccountClientId": "drims-api",
+      "realmRoles": ["System Integration"],
+      "attributes": {"site_ids": ["WH01"]}
     }
   ]
 }

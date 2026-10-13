@@ -138,6 +138,10 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
       KEYCLOAK_SERVER_URL: http://keycloak:8080
       KEYCLOAK_REALM: drims
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/drims}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-drims-api}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-drims-api}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-drims-api-dev-secret}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "${BACKEND_PUBLISHED_PORT:-8000}:8000"

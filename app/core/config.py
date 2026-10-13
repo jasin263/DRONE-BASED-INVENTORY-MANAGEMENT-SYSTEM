@@ -41,9 +41,13 @@ class Settings:
     # Keycloak settings
     keycloak_server_url: str = os.getenv("KEYCLOAK_SERVER_URL", "http://localhost:8080")
     keycloak_realm: str = os.getenv("KEYCLOAK_REALM", "drims")
+    keycloak_issuer: str = os.getenv(
+        "KEYCLOAK_ISSUER",
+        f"{keycloak_server_url.rstrip('/')}/realms/{keycloak_realm}",
+    )
     keycloak_client_id: str = os.getenv("KEYCLOAK_CLIENT_ID", "drims-api")
     keycloak_client_secret: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "secret")
-    keycloak_audience: str = os.getenv("KEYCLOAK_AUDIENCE", "drims-web")
+    keycloak_audience: str = os.getenv("KEYCLOAK_AUDIENCE", "drims-api")
     jwks_cache_seconds: int = int(os.getenv("JWKS_CACHE_SECONDS", "300"))
     readiness_timeout_seconds: float = float(
         os.getenv("READINESS_TIMEOUT_SECONDS", "3")

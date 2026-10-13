@@ -4,7 +4,7 @@ import json
 import socket
 from urllib.request import urlopen
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -48,6 +48,23 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             "detail": "The request could not be completed.",
             "instance": str(request.url),
         },
+        media_type="application/problem+json",
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    title = "Unauthorized" if exc.status_code == 401 else "Forbidden" if exc.status_code == 403 else "Request failed"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "type": f"https://drims.local/problems/{exc.status_code}",
+            "title": title,
+            "status": exc.status_code,
+            "detail": exc.detail,
+            "instance": str(request.url),
+        },
+        headers=exc.headers,
         media_type="application/problem+json",
     )
 

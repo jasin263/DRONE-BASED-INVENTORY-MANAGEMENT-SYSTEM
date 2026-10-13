@@ -56,6 +56,14 @@ def _get_jwks() -> dict[str, object]:
     return _jwks
 
 
+def _refresh_jwks() -> dict[str, object]:
+    global _jwks, _jwks_expiry
+    with _jwks_lock:
+        _jwks = None
+        _jwks_expiry = 0.0
+    return _get_jwks()
+
+
 def _unauthorized(detail: str = "Authentication required") -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,16 +82,18 @@ def _decode_token(token: str) -> dict[str, object]:
         kid = header.get("kid")
         key = next((key for key in _get_jwks().get("keys", []) if key.get("kid") == kid), None)
         if key is None:
+            key = next(
+                (candidate for candidate in _refresh_jwks().get("keys", []) if candidate.get("kid") == kid),
+                None,
+            )
+        if key is None:
             raise _unauthorized("Signing key is not available")
         return jwt.decode(
             token,
             key,
             algorithms=["RS256"],
             audience=settings.keycloak_audience,
-            issuer=(
-                f"{settings.keycloak_server_url.rstrip('/')}/realms/"
-                f"{settings.keycloak_realm}"
-            ),
+            issuer=settings.keycloak_issuer,
             options={"verify_exp": True, "verify_iat": True},
         )
     except HTTPException:
@@ -100,6 +110,8 @@ def _principal(payload: dict[str, object]) -> Principal:
     if not roles:
         raise _forbidden("The token has no DRIMS role")
     raw_sites = payload.get("site_ids") or payload.get("sites") or []
+    if isinstance(raw_sites, str):
+        raw_sites = [raw_sites]
     site_ids = frozenset(str(site) for site in raw_sites)
     return Principal(
         subject=str(payload["sub"]),
