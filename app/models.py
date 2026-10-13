@@ -10,6 +10,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, backref
+from geoalchemy2 import Geometry
 from types import SimpleNamespace
 
 from .core.config import settings
@@ -41,7 +42,7 @@ def make_enum(enum_values, name=None):
     return SQLAEnum(
         *enum_values,
         name=name,
-        native_enum=False,  # Use string values instead of PostgreSQL ENUM type
+        native_enum=True,  # Use PostgreSQL native ENUM type
     )
 
 
@@ -103,7 +104,7 @@ class Mission(Base):
     mission_id = Column(String(100), nullable=False, unique=True)  # external UUID
     drone_id = Column(Integer, ForeignKey("drone.id", ondelete="SET NULL"), nullable=True)
     site_id = Column(Integer, ForeignKey("site.id", ondelete="CASCADE"), nullable=False)
-    status = Column(SQLAEnum(*mission_status_enum, name="missionstatus", native_enum=False), nullable=False, default="RECEIVING")
+    status = Column(SQLAEnum(*mission_status_enum, name="missionstatus", native_enum=True), nullable=False, default="RECEIVING")
     coverage_pct = Column(Float, nullable=True, default=0.0)
     total_scans = Column(Integer, nullable=True, default=0)
     total_bins_visited = Column(Integer, nullable=True, default=0)
@@ -111,6 +112,7 @@ class Mission(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Relationships
     site = relationship("Site", back_populates="missions")
@@ -139,9 +141,10 @@ class Location(Base):
     level_code = Column(String(50), nullable=True)
     bin_code = Column(String(50), nullable=False)
     label_code = Column(String(50), nullable=True)
-    polygon = Column(Text, nullable=True)  # PostWKT or GeoJSON for PostGIS polygon
+    polygon = Column(Geometry("POLYGON", srid=4326), nullable=True)  # PostGIS polygon geometry
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Constraints
     __table_args__ = (
@@ -174,6 +177,7 @@ class SKU(Base):
     unit_value = Column(Float, nullable=True, default=1.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Constraints
     __table_args__ = (
@@ -221,7 +225,7 @@ class ScanEvent(Base):
     mission_id = Column(Integer, ForeignKey("mission.id", ondelete="CASCADE"), nullable=False)
     drone_id = Column(Integer, ForeignKey("drone.id", ondelete="SET NULL"), nullable=True)
     event_time = Column(DateTime(timezone=True), primary_key=True, nullable=False)
-    read_type = Column(SQLAEnum(*read_type_enum, name="readtype", native_enum=False), nullable=False)
+    read_type = Column(SQLAEnum(*read_type_enum, name="readtype", native_enum=True), nullable=False)
     symbology = Column(String(50), nullable=True)  # EAN-13, Code-128, QR, RFID EPC etc
     value = Column(String(255), nullable=False)  # raw scanned value
     confidence = Column(Float, nullable=False, default=1.0)
@@ -235,8 +239,9 @@ class ScanEvent(Base):
     bbox_y1 = Column(Float, nullable=True)
     bbox_x2 = Column(Float, nullable=True)
     bbox_y2 = Column(Float, nullable=True)
-    event_status = Column(SQLAEnum(*event_status_enum, name="eventstatus", native_enum=False), nullable=False, default="active")
+    event_status = Column(SQLAEnum(*event_status_enum, name="eventstatus", native_enum=True), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Relationships
     mission = relationship("Mission", back_populates="scan_events")
@@ -299,6 +304,7 @@ class BinCount(Base):
     image_coverage_ratio = Column(Float, nullable=True, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Constraints
     __table_args__ = (
@@ -351,11 +357,12 @@ class ReconResult(Base):
     sku_id = Column(Integer, ForeignKey("sku.id", ondelete="SET NULL"), nullable=True)
     location_id = Column(Integer, ForeignKey("location.id", ondelete="SET NULL"), nullable=True)
     lot = Column(String(100), nullable=True)
-    outcome = Column(SQLAEnum(*recon_outcome_enum, name="reconoutcome", native_enum=False), nullable=False)
+    outcome = Column(SQLAEnum(*recon_outcome_enum, name="reconoutcome", native_enum=True), nullable=False)
     variance = Column(Integer, nullable=True)  # difference between counted and booked
     confidence = Column(Float, nullable=True)
     details = Column(JSON, nullable=True)  # additional rationale
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Relationships
     mission = relationship("Mission", back_populates="recon_results")
@@ -376,13 +383,14 @@ class DiscrepancyCase(Base):
     sku_id = Column(Integer, ForeignKey("sku.id", ondelete="SET NULL"), nullable=True)
     location_id = Column(Integer, ForeignKey("location.id", ondelete="SET NULL"), nullable=True)
     lot = Column(String(100), nullable=True)
-    outcome = Column(SQLAEnum(*recon_outcome_enum, name="reconoutcome", native_enum=False), nullable=False)
+    outcome = Column(SQLAEnum(*recon_outcome_enum, name="reconoutcome", native_enum=True), nullable=False)
     variance_value = Column(Integer, nullable=True)  # absolute variance
     threshold_value = Column(Float, nullable=True)  # configurable threshold
     status = Column(String(50), nullable=False, default="open")  # "open", "approved", "rejected"
     assigned_to = Column(Integer, ForeignKey("app_user.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_source = Column(String(20), nullable=False, default="production")
 
     # Relationships
     mission = relationship("Mission", back_populates="discrepancy_cases")
@@ -449,7 +457,7 @@ class AppUser(Base):
     username = Column(String(255), nullable=False, unique=True)
     email = Column(String(255), nullable=True, unique=True)
     password_hash = Column(String(255), nullable=False)
-    role = Column(SQLAEnum(*user_role_enum, name="userrole", native_enum=False), nullable=False, default="Viewer")
+    role = Column(SQLAEnum(*user_role_enum, name="userrole", native_enum=True), nullable=False, default="Viewer")
     site_id = Column(Integer, ForeignKey("site.id", ondelete="CASCADE"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -473,7 +481,7 @@ class UserRole(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     user_id = Column(Integer, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False)
-    role = Column(SQLAEnum(*user_role_enum, name="userrole", native_enum=False), nullable=False)
+    role = Column(SQLAEnum(*user_role_enum, name="userrole", native_enum=True), nullable=False)
     granted_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Constraints
