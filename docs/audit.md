@@ -19,7 +19,7 @@ STARTED` means the repository has no implementation.
 | Honest live/readiness health | VERIFIED | Final output was `live=200 ready=200`; dependency-stop runs returned 503 for Postgres, MinIO, and Keycloak, and the stack restored to ready. |
 | Alembic migration execution | VERIFIED | `001_initial_schema (head)` and 148 PostgreSQL relations were present after a clean volume reset. |
 | Gate 0 automated tests | VERIFIED | Docker output: `19 passed, 2 warnings in 1.18s`. |
-| Full required production schema | WRITTEN BUT UNTESTED | The current migration still needs `job`/`dead_letter`, monthly scan partitions, universal `site_id`/timestamps, and PostGIS polygon alignment before this requirement can be VERIFIED. |
+| Full required production schema | WRITTEN BUT UNTESTED | Migration `002_gate0_schema` adds provenance columns, PostGIS geometry, role/job/dead_letter tables, indexes, and audit immutability. Monthly scan-event partition conversion remains to be implemented and verified. |
 
 ## Raw audit commands
 
