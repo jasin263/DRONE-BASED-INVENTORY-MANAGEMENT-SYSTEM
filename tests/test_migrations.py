@@ -3,25 +3,33 @@
 import os
 from pathlib import Path
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 
-pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_MIGRATION_TESTS") != "1",
-    reason="set RUN_MIGRATION_TESTS=1 for the destructive migration round-trip",
-)
-
-
 def test_migration_round_trip_and_gate0_constraints() -> None:
     root = Path(__file__).parents[1]
     config = Config(str(root / "backend" / "db" / "alembic.ini"))
-    command.downgrade(config, "base")
-    command.upgrade(config, "head")
+    database_url = os.getenv(
+        "MIGRATION_TEST_DATABASE_URL",
+        "postgresql+psycopg://drims:drims_password@postgres:5432/drims_test",
+    )
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+    previous_database_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = database_url
+    try:
+        command.downgrade(config, "base")
+        command.upgrade(config, "head")
+    finally:
+        if previous_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous_database_url
 
-    engine = create_engine(os.getenv("DATABASE_URL", "postgresql+psycopg://drims:drims_password@postgres:5432/drims"))
+    engine = create_engine(
+        database_url
+    )
     with engine.begin() as connection:
         tables = set(
             connection.execute(

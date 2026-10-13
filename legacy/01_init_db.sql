@@ -1,0 +1,1 @@
+-- Historical schema script; use Alembic instead.

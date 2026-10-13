@@ -13,6 +13,7 @@ services:
       - "${POSTGRES_PUBLISHED_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -82,7 +83,7 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-drims}
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
       KC_DB_USERNAME: ${DB_USER:-drims}
       KC_DB_PASSWORD: ${DB_PASSWORD:-drims_password}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
@@ -128,6 +129,7 @@ services:
       DB_NAME: ${DB_NAME:-drims}
       DB_HOST: postgres
       DB_PORT: 5432
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-drims}:${DB_PASSWORD:-drims_password}@postgres:5432/${DB_NAME:-drims}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MINIO_ENDPOINT: minio:9000
