@@ -1,0 +1,10 @@
+FROM python:3.13-slim
+
+RUN pip install --no-cache-dir awscli==1.35.24 boto3==1.35.24 minio==7.2.20 Pillow==10.4.0
+COPY tools/data_loader.py /opt/data_loader.py
+
+RUN useradd --create-home --uid 10001 drims && mkdir -p /data && chown -R drims:drims /data
+USER drims
+WORKDIR /data
+
+ENTRYPOINT ["python", "/opt/data_loader.py"]

@@ -1,0 +1,10 @@
+FROM python:3.13-slim
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y libzbar0 \
+  && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir Pillow==10.4.0 pyzbar==0.1.9 zxing-cpp==2.3.0
+
+COPY tools/evaluate_barcode.py /opt/evaluate_barcode.py
+WORKDIR /dataset
+ENTRYPOINT ["python", "/opt/evaluate_barcode.py"]

@@ -1,0 +1,13 @@
+/data/
+/Dataset/
+**/node_modules/
+**/__pycache__/
+.env
+.env.*
+!.env.example
+*.zip
+playwright-report/
+test-results/
+.coverage
+coverage.xml
+htmlcov/

@@ -1,0 +1,348 @@
+name: drims
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: drims-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-drims}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-drims_password}
+      POSTGRES_DB: ${DB_NAME:-drims}
+    ports:
+      - "${POSTGRES_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [drims]
+
+  redis:
+    image: redis:7-alpine
+    container_name: drims-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PUBLISHED_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [drims]
+
+  minio:
+    image: pgsty/minio:latest
+    container_name: drims-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PUBLISHED_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PUBLISHED_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [drims]
+
+  minio-init:
+    build:
+      context: .
+      dockerfile: ops/Dockerfile.minio-init
+    container_name: drims-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; raise SystemExit(0 if Path('/tmp/initialized').exists() else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    networks: [drims]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    container_name: drims-keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-drims}
+      KC_DB_USERNAME: ${DB_USER:-drims}
+      KC_DB_PASSWORD: ${DB_PASSWORD:-drims_password}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-adminpass}
+    ports:
+      - "${KEYCLOAK_PUBLISHED_PORT:-8080}:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "echo > /dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks: [drims]
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: drims-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PUBLISHED_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PUBLISHED_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [drims]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.backend
+    container_name: drims-backend
+    restart: unless-stopped
+    environment:
+      DB_USER: ${DB_USER:-drims}
+      DB_PASSWORD: ${DB_PASSWORD:-drims_password}
+      DB_NAME: ${DB_NAME:-drims}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: drims
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${BACKEND_PUBLISHED_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [drims]
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+    container_name: drims-worker
+    restart: unless-stopped
+    environment:
+      DB_USER: ${DB_USER:-drims}
+      DB_PASSWORD: ${DB_PASSWORD:-drims_password}
+      DB_NAME: ${DB_NAME:-drims}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker_app:celery_app inspect ping -d celery@$$(hostname) >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 20s
+    networks: [drims]
+
+  beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+    container_name: drims-beat
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["celery", "-A", "app.worker_app:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat-schedule"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    networks: [drims]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: drims-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8080}
+      VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-drims}
+      VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-drims-web}
+    ports:
+      - "${FRONTEND_PUBLISHED_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [drims]
+
+  e2e:
+    profiles: ["e2e"]
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks: [drims]
+
+  data-loader:
+    profiles: ["data-loader"]
+    build:
+      context: .
+      dockerfile: ops/Dockerfile.data-loader
+    environment:
+      BIN_SAMPLE_SIZE: ${BIN_SAMPLE_SIZE:-5000}
+      DATA_ROOT: /data
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./data:/data
+      - ./Dataset/1d_barcode_hough:/data/barcode/artelab_hough_no1:ro
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [drims]
+
+  barcode-eval:
+    profiles: ["barcode-eval"]
+    build:
+      context: .
+      dockerfile: ops/Dockerfile.barcode-eval
+    volumes:
+      - ./Dataset/1d_barcode_hough:/dataset:ro
+    networks: [drims]
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: drims-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PUBLISHED_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [drims]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: drims-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${GRAFANA_PUBLISHED_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [drims]
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: drims-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./ops/loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "${LOKI_PUBLISHED_PORT:-3100}:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3100/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [drims]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    container_name: drims-otel
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./ops/otel/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [drims]
+
+networks:
+  drims:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:

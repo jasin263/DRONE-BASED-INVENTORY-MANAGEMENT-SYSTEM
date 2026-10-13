@@ -1,0 +1,9 @@
+FROM python:3.13-slim
+
+RUN pip install --no-cache-dir minio==7.2.20
+COPY ops/minio-init.py /opt/minio-init.py
+
+RUN useradd --create-home --uid 10001 drims
+USER drims
+
+ENTRYPOINT ["python", "/opt/minio-init.py"]

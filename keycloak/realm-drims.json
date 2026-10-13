@@ -1,0 +1,78 @@
+{
+  "realm": "drims",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      {"name": "Admin"},
+      {"name": "Inventory Controller"},
+      {"name": "Warehouse Supervisor"},
+      {"name": "Viewer"},
+      {"name": "System Integration"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "drims-web",
+      "name": "DRIMS Web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*", "http://frontend/*"],
+      "webOrigins": ["http://localhost:3000", "http://frontend"],
+      "attributes": {"pkce.code.challenge.method": "S256"}
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@drims.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "realmRoles": ["Admin"],
+      "credentials": [{"type": "password", "value": "adminpass", "temporary": false}]
+    },
+    {
+      "username": "inventory_controller",
+      "email": "controller@drims.local",
+      "emailVerified": true,
+      "firstName": "Inventory",
+      "lastName": "Controller",
+      "enabled": true,
+      "realmRoles": ["Inventory Controller"],
+      "credentials": [{"type": "password", "value": "controllerpass", "temporary": false}]
+    },
+    {
+      "username": "warehouse_supervisor",
+      "email": "supervisor@drims.local",
+      "emailVerified": true,
+      "firstName": "Warehouse",
+      "lastName": "Supervisor",
+      "enabled": true,
+      "realmRoles": ["Warehouse Supervisor"],
+      "credentials": [{"type": "password", "value": "supervisorpass", "temporary": false}]
+    },
+    {
+      "username": "viewer",
+      "email": "viewer@drims.local",
+      "emailVerified": true,
+      "firstName": "Viewer",
+      "lastName": "User",
+      "enabled": true,
+      "realmRoles": ["Viewer"],
+      "credentials": [{"type": "password", "value": "viewerpass", "temporary": false}]
+    },
+    {
+      "username": "integration_account",
+      "email": "integration@drims.local",
+      "emailVerified": true,
+      "firstName": "Integration",
+      "lastName": "Account",
+      "enabled": true,
+      "realmRoles": ["System Integration"],
+      "credentials": [{"type": "password", "value": "integrationpass", "temporary": false}]
+    }
+  ]
+}
